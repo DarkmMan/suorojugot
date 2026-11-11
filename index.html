@@ -2,18 +2,23 @@
 <html lang="bn">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>৩ডি সৌরজগত সিমুলেটর | Advanced Solar System</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
   
   * { margin: 0; padding: 0; box-sizing: border-box; }
   
-  body {
+  html, body {
     overflow: hidden;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
     background: #000;
     font-family: 'Noto Sans Bengali', 'Segoe UI', sans-serif;
     color: #e0e6ed;
+    touch-action: none;
+    -webkit-text-size-adjust: 100%;
   }
   
   #canvas-container {
@@ -219,10 +224,42 @@
   
   #info-panel.visible { display: block; }
   
+  #info-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  
   #info-panel h2 {
     font-size: 1.1rem;
-    margin-bottom: 12px;
+    margin-bottom: 0;
     color: #7dd3fc;
+    flex: 1;
+  }
+  
+  #btnCloseInfo {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(30, 41, 59, 0.9);
+    border: 1px solid rgba(100, 160, 255, 0.3);
+    color: #94a3b8;
+    cursor: pointer;
+  }
+  
+  #btnCloseInfo:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: #ef4444;
+    color: #fca5a5;
   }
   
   .info-row {
@@ -337,13 +374,17 @@
     <div class="section-title">🔭 ভিজ্যুয়াল অপশন</div>
     <div class="btn-group">
       <button id="btnOrbits" class="active">কক্ষপথ</button>
+      <button id="btnMoonOrbits" class="active">উপগ্রহ পথ</button>
       <button id="btnTrails" class="active">ট্রেইল</button>
-      <button id="btnLabels" class="active">লেবেল</button>
     </div>
     <div class="btn-group" style="margin-top:6px;">
+      <button id="btnLabels" class="active">লেবেল</button>
       <button id="btnStars" class="active">নক্ষত্র</button>
       <button id="btnRings" class="active">রিং</button>
+    </div>
+    <div class="btn-group" style="margin-top:6px;">
       <button id="btnMag" class="active">চুম্বক</button>
+      <button id="btnAsteroids" class="active">অ্যাস্টেরয়েড</button>
     </div>
   </div>
   
@@ -365,7 +406,10 @@
 </div>
 
 <div id="info-panel">
-  <h2 id="infoName">—</h2>
+  <div id="info-panel-header">
+    <h2 id="infoName">—</h2>
+    <button id="btnCloseInfo" title="বিবরণ বন্ধ করুন">✕</button>
+  </div>
   <div class="info-row"><span class="info-label">ভর (পৃথিবী = ১)</span><span class="info-value" id="infoMass">—</span></div>
   <div class="info-row"><span class="info-label">দূরত্ব (AU)</span><span class="info-value" id="infoDist">—</span></div>
   <div class="info-row"><span class="info-label">কক্ষীয় বেগ</span><span class="info-value" id="infoVel">—</span></div>
@@ -378,7 +422,7 @@
 </div>
 
 <div id="help">
-  মাউস: ঘোরান • স্ক্রল: জুম • ক্লিক: গ্রহ সিলেক্ট • স্পেস: পজ • H: মেনু টগল
+  মাউস: ঘোরান • স্ক্রল: জুম • ক্লিক: গ্রহ সিলেক্ট • খালি জায়গায় ক্লিক: বিবরণ বন্ধ • স্পেস: পজ • H: মেনু
 </div>
 
 <script type="importmap">
@@ -406,6 +450,7 @@ const TEX = {
   venus:   TEX_BASE + 'venusmap.jpg',
   earth:   TEX_BASE + 'earthmap1k.jpg',
   earthCloud: TEX_BASE + 'earthcloudmap.jpg',
+  moon:    TEX_BASE + 'moonmap1k.jpg',
   mars:    TEX_BASE + 'marsmap1k.jpg',
   jupiter: TEX_BASE + 'jupitermap.jpg',
   saturn:  TEX_BASE + 'saturnmap.jpg',
@@ -496,6 +541,46 @@ const PLANETS = [
 
 const SUN_MASS = 332946; // Earth masses
 const G = 0.000295912;   // AU³ / day² / Earth-mass  (approx for solar system units)
+
+// Major moons: dist = orbital radius in planet visual-radii units (scaled for visibility),
+// periodDays = sidereal period, radiusRel = size vs Earth's Moon visual baseline
+const MOONS = {
+  earth: [
+    { id: 'moon', name: 'চাঁদ', periodDays: 27.322, dist: 4.2, radiusRel: 1.0, color: 0xcccccc, e: 0.055, texture: 'moon' }
+  ],
+  mars: [
+    { id: 'phobos', name: 'ফোবস', periodDays: 0.319, dist: 2.4, radiusRel: 0.28, color: 0xa08060, e: 0.015 },
+    { id: 'deimos', name: 'ডেমোস', periodDays: 1.263, dist: 3.8, radiusRel: 0.18, color: 0x908070, e: 0.0003 }
+  ],
+  jupiter: [
+    { id: 'io', name: 'আইও', periodDays: 1.769, dist: 2.8, radiusRel: 0.9, color: 0xf0d040, e: 0.004 },
+    { id: 'europa', name: 'ইউরোপা', periodDays: 3.551, dist: 3.6, radiusRel: 0.78, color: 0xd0d8e8, e: 0.009 },
+    { id: 'ganymede', name: 'গ্যানিমিড', periodDays: 7.155, dist: 4.8, radiusRel: 1.2, color: 0xa89880, e: 0.001 },
+    { id: 'callisto', name: 'ক্যালিস্টো', periodDays: 16.689, dist: 6.5, radiusRel: 1.1, color: 0x706050, e: 0.007 }
+  ],
+  saturn: [
+    { id: 'mimas', name: 'মাইমাস', periodDays: 0.942, dist: 2.6, radiusRel: 0.22, color: 0xdddddd, e: 0.02 },
+    { id: 'enceladus', name: 'এনসেলাডাস', periodDays: 1.370, dist: 3.0, radiusRel: 0.28, color: 0xf5f8ff, e: 0.005 },
+    { id: 'tethys', name: 'থিটিস', periodDays: 1.888, dist: 3.4, radiusRel: 0.48, color: 0xe0e0e0, e: 0.0001 },
+    { id: 'dione', name: 'ডায়োনি', periodDays: 2.737, dist: 3.9, radiusRel: 0.5, color: 0xd0d0d0, e: 0.002 },
+    { id: 'rhea', name: 'রিয়া', periodDays: 4.518, dist: 4.6, radiusRel: 0.7, color: 0xc0c0c0, e: 0.001 },
+    { id: 'titan', name: 'টাইটান', periodDays: 15.945, dist: 6.2, radiusRel: 1.25, color: 0xe0a050, e: 0.029, haze: true },
+    { id: 'iapetus', name: 'আইয়াপেটাস', periodDays: 79.322, dist: 8.5, radiusRel: 0.65, color: 0x7a6a55, e: 0.028 }
+  ],
+  uranus: [
+    { id: 'miranda', name: 'মিরান্ডা', periodDays: 1.413, dist: 2.5, radiusRel: 0.25, color: 0xb8b8b8, e: 0.001 },
+    { id: 'ariel', name: 'অ্যারিয়েল', periodDays: 2.520, dist: 3.0, radiusRel: 0.48, color: 0xc0c0c8, e: 0.001 },
+    { id: 'umbriel', name: 'আমব্রিয়েল', periodDays: 4.144, dist: 3.5, radiusRel: 0.5, color: 0x4a4a55, e: 0.004 },
+    { id: 'titania', name: 'টাইটানিয়া', periodDays: 8.706, dist: 4.4, radiusRel: 0.75, color: 0xa0a0b0, e: 0.001 },
+    { id: 'oberon', name: 'ওবেরন', periodDays: 13.463, dist: 5.2, radiusRel: 0.72, color: 0x9090a0, e: 0.001 }
+  ],
+  neptune: [
+    { id: 'triton', name: 'ট্রাইটন', periodDays: -5.877, dist: 4.5, radiusRel: 1.0, color: 0xd0e0e8, e: 0.000016 }
+  ]
+};
+
+// Global list of moon orbit lines (for show/hide)
+const moonOrbitLines = [];
 
 // ===================== SCENE SETUP =====================
 const container = document.getElementById('canvas-container');
@@ -603,41 +688,47 @@ function loadTex(url) {
 const sunGroup = new THREE.Group();
 scene.add(sunGroup);
 
-const sunGeo = new THREE.SphereGeometry(1.8, 64, 64);
+const SUN_VISUAL_R = 2.4;
+
+// Photosphere
+const sunGeo = new THREE.SphereGeometry(SUN_VISUAL_R, 96, 96);
 const sunMat = new THREE.MeshBasicMaterial({
   map: loadTex(TEX.sun),
-  color: 0xffeeaa
+  color: 0xfff0c0
 });
 const sunMesh = new THREE.Mesh(sunGeo, sunMat);
 sunGroup.add(sunMesh);
 
+// Bright core glow
+const sunCore = new THREE.Mesh(
+  new THREE.SphereGeometry(SUN_VISUAL_R * 0.92, 32, 32),
+  new THREE.MeshBasicMaterial({ color: 0xffffee, transparent: true, opacity: 0.35 })
+);
+sunGroup.add(sunCore);
+
 // Point light moves with the Sun
+sunLight.intensity = 3.4;
 sunGroup.add(sunLight);
 
-// Corona / glow layers
-const coronaGeo = new THREE.SphereGeometry(2.35, 32, 32);
-const coronaMat = new THREE.MeshBasicMaterial({
-  color: 0xffaa22,
-  transparent: true,
-  opacity: 0.22,
-  side: THREE.BackSide
+// Multi-layer corona
+[
+  { r: 1.15, color: 0xffcc44, op: 0.28 },
+  { r: 1.45, color: 0xffaa22, op: 0.16 },
+  { r: 1.9,  color: 0xff7711, op: 0.08 },
+  { r: 2.5,  color: 0xff5500, op: 0.04 },
+  { r: 3.3,  color: 0xff3300, op: 0.02 }
+].forEach(c => {
+  sunGroup.add(new THREE.Mesh(
+    new THREE.SphereGeometry(SUN_VISUAL_R * c.r, 32, 32),
+    new THREE.MeshBasicMaterial({
+      color: c.color, transparent: true, opacity: c.op,
+      side: THREE.BackSide, depthWrite: false
+    })
+  ));
 });
-sunGroup.add(new THREE.Mesh(coronaGeo, coronaMat));
 
-const corona2 = new THREE.Mesh(
-  new THREE.SphereGeometry(3.1, 32, 32),
-  new THREE.MeshBasicMaterial({ color: 0xff7700, transparent: true, opacity: 0.1, side: THREE.BackSide })
-);
-sunGroup.add(corona2);
-
-const corona3 = new THREE.Mesh(
-  new THREE.SphereGeometry(4.2, 24, 24),
-  new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.04, side: THREE.BackSide })
-);
-sunGroup.add(corona3);
-
-// Complex solar magnetic field
-const sunMagField = createSolarMagneticField(1.8);
+// Complex solar magnetic field (large)
+const sunMagField = createSolarMagneticField(SUN_VISUAL_R);
 sunGroup.add(sunMagField);
 
 // Sun orbit trail around barycenter
@@ -669,144 +760,194 @@ function planetRadius(rEarth) {
 }
 
 // ===================== MAGNETIC FIELD LINES =====================
-// Dipole field line in magnetic coordinates: r = L * sin²(θ)
-// Returns array of Vector3 points for one closed-ish field line loop (N→S lobe)
-function dipoleFieldLine(L, planetR, numPts = 48) {
-  const pts = [];
-  // θ from near magnetic north pole toward equator and down to south
-  for (let i = 0; i <= numPts; i++) {
-    const t = i / numPts;
-    // θ from small epsilon to π - epsilon
-    const theta = 0.12 + t * (Math.PI - 0.24);
-    const r = L * Math.sin(theta) * Math.sin(theta);
-    if (r < planetR * 1.02) continue; // inside planet
-    const x = r * Math.sin(theta);
-    const y = r * Math.cos(theta);
-    pts.push(new THREE.Vector3(x, y, 0));
-  }
-  return pts;
-}
-
+// Asymmetric magnetosphere: compressed toward Sun (+X local), stretched magnetotail (−X)
+// Local frame: +X = sunward, −X = anti-sunward (tail), Y = north
 function createMagnetosphere(planetR, magMoment, magTiltDeg, color) {
   const group = new THREE.Group();
   if (!magMoment || magMoment <= 0) return group;
 
-  // Size scale: Earth magnetosphere ~10–15 R_E on dayside; visual scale
-  // moment^(1/3) relative to Earth, clamped for readability
   const strength = Math.pow(Math.max(magMoment, 1e-6), 1 / 3);
-  // Visual L shells (in planet radii)
-  const baseL = 2.2 + Math.min(strength, 12) * 0.55;
-  const Lshells = [
-    baseL * 0.55,
-    baseL * 0.85,
-    baseL * 1.15,
-    baseL * 1.5
-  ].map(L => Math.max(L, 1.6));
+  // Dayside standoff ~ few–tens of R_p (visual)
+  const dayStandoff = planetR * (1.8 + Math.min(strength, 10) * 0.35);
+  const tailLength = planetR * (6 + Math.min(strength, 14) * 1.1);
+  const col = color || 0x44ffaa;
 
-  const longitudes = 8; // field lines around axis
-  const mat = new THREE.LineBasicMaterial({
-    color: color || 0x44ffaa,
-    transparent: true,
-    opacity: 0.45,
-    depthWrite: false
+  const lineMat = () => new THREE.LineBasicMaterial({
+    color: col, transparent: true, opacity: 0.5, depthWrite: false
   });
 
-  Lshells.forEach((L, li) => {
-    const opac = 0.55 - li * 0.08;
-    for (let k = 0; k < longitudes; k++) {
-      const phi = (k / longitudes) * Math.PI * 2;
-      const raw = dipoleFieldLine(L * planetR, planetR, 40);
-      if (raw.length < 3) continue;
-      const pts = raw.map(p => {
-        // rotate around Y (magnetic axis) by phi
-        const x = p.x * Math.cos(phi);
-        const z = p.x * Math.sin(phi);
-        return new THREE.Vector3(x, p.y, z);
-      });
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(geo, mat.clone());
-      line.material.opacity = opac;
+  // Closed dayside / polar dipole loops (compressed on +X)
+  const nLong = 10;
+  const nShell = 4;
+  for (let s = 0; s < nShell; s++) {
+    const shell = 0.55 + s * 0.22;
+    for (let k = 0; k < nLong; k++) {
+      const phi = (k / nLong) * Math.PI * 2;
+      const pts = [];
+      for (let i = 0; i <= 48; i++) {
+        const t = i / 48;
+        const theta = 0.15 + t * (Math.PI - 0.3);
+        // Base dipole radius
+        let r = dayStandoff * shell * Math.sin(theta) * Math.sin(theta);
+        // Compress dayside (when x>0), stretch nightside
+        const xDip = r * Math.sin(theta); // in meridional plane before phi
+        const dayNight = Math.cos(phi); // +1 dayside-ish in this construction
+        // Remap: use phi so +X is sunward
+        const stretch = dayNight > 0
+          ? 0.55 + 0.45 * (1 - dayNight * 0.5) // compress toward sun
+          : 1.0 + (-dayNight) * (tailLength / dayStandoff) * 0.35;
+        r *= stretch;
+        if (r < planetR * 1.05) continue;
+        const x = r * Math.sin(theta) * Math.cos(phi);  // sunward component
+        const y = r * Math.cos(theta);
+        const z = r * Math.sin(theta) * Math.sin(phi);
+        // Extra tail pull for nightside points
+        const tailPull = x < 0 ? x * 0.35 * shell : 0;
+        pts.push(new THREE.Vector3(x + tailPull, y, z));
+      }
+      if (pts.length < 4) continue;
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        lineMat()
+      );
+      line.material.opacity = 0.55 - s * 0.08;
       group.add(line);
     }
-  });
+  }
 
-  // Magnetic axis tilt relative to rotation axis
-  group.rotation.z = THREE.MathUtils.degToRad(magTiltDeg || 0);
-
-  // Soft magnetopause shell (ellipsoid stretched anti-sunward would need sun dir;
-  // use sphere as approximate closed region)
-  const mpR = planetR * baseL * 1.05;
-  const mp = new THREE.Mesh(
-    new THREE.SphereGeometry(mpR, 24, 16),
-    new THREE.MeshBasicMaterial({
-      color: color || 0x44ffaa,
-      transparent: true,
-      opacity: 0.04,
-      side: THREE.BackSide,
-      depthWrite: false
-    })
-  );
-  group.add(mp);
-
-  group.userData.isMagnetosphere = true;
-  return group;
-}
-
-// Complex solar magnetic field: multipole-ish field lines + Parker-spiral hint
-function createSolarMagneticField(sunR) {
-  const group = new THREE.Group();
-  const colors = [0xff6622, 0xffaa44, 0xffcc66, 0xff4400];
-
-  // Closed dipole-like loops near the Sun (arcade / helmet streamers)
-  for (let loop = 0; loop < 12; loop++) {
-    const phi = (loop / 12) * Math.PI * 2;
-    const L = sunR * (1.8 + (loop % 3) * 0.45);
+  // Explicit magnetotail field lines (anti-sunward)
+  for (let k = 0; k < 8; k++) {
+    const ang = (k / 8) * Math.PI * 2;
     const pts = [];
     for (let i = 0; i <= 36; i++) {
       const t = i / 36;
-      const theta = 0.2 + t * (Math.PI - 0.4);
-      const r = L * Math.sin(theta) * Math.sin(theta);
-      if (r < sunR * 1.05) continue;
-      // slight multipole warping
-      const warp = 0.15 * Math.sin(2 * theta + loop);
-      const x = (r + warp * sunR) * Math.sin(theta) * Math.cos(phi);
-      const y = (r + warp * sunR) * Math.cos(theta);
-      const z = (r + warp * sunR) * Math.sin(theta) * Math.sin(phi);
+      const x = -planetR * 1.2 - t * tailLength;
+      const flare = 1 + t * 1.8;
+      const y = Math.cos(ang) * planetR * 0.7 * flare * (0.3 + 0.7 * Math.sin(t * Math.PI));
+      const z = Math.sin(ang) * planetR * 0.7 * flare * (0.3 + 0.7 * Math.sin(t * Math.PI));
       pts.push(new THREE.Vector3(x, y, z));
     }
-    if (pts.length < 3) continue;
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({
-      color: colors[loop % colors.length],
-      transparent: true,
-      opacity: 0.35,
-      depthWrite: false
-    });
-    group.add(new THREE.Line(geo, mat));
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      lineMat()
+    );
+    line.material.opacity = 0.32;
+    group.add(line);
   }
 
-  // Open field lines / polar plume style (radial with slight spiral)
-  for (let i = 0; i < 16; i++) {
-    const phi = (i / 16) * Math.PI * 2;
-    const polar = i < 8 ? 1 : -1;
+  // Magnetopause boundary — ellipsoid: short toward Sun, long tail
+  const mp = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 32, 24),
+    new THREE.MeshBasicMaterial({
+      color: col, transparent: true, opacity: 0.055,
+      side: THREE.BackSide, depthWrite: false
+    })
+  );
+  mp.scale.set(dayStandoff * 0.95, dayStandoff * 1.15, dayStandoff * 1.15);
+  // shift center slightly toward nightside
+  mp.position.x = -tailLength * 0.12;
+  group.add(mp);
+
+  // Magnetic dipole tilt (relative to rotation axis) applied inside
+  const tiltGroup = new THREE.Group();
+  tiltGroup.rotation.z = THREE.MathUtils.degToRad(magTiltDeg || 0);
+  // Re-parent lines into tilt? Simpler: apply tilt on whole group after sunward orient
+  group.userData.magTilt = magTiltDeg || 0;
+  group.userData.isMagnetosphere = true;
+  group.userData.dayStandoff = dayStandoff;
+  return group;
+}
+
+// Orient magnetosphere so local +X points toward the Sun (compressed side)
+function orientMagnetosphereTowardSun(magGroup, planetWorldPos, sunWorldPos) {
+  if (!magGroup) return;
+  const xAxis = new THREE.Vector3().subVectors(sunWorldPos, planetWorldPos);
+  if (xAxis.lengthSq() < 1e-12) return;
+  xAxis.normalize();
+  const up = Math.abs(xAxis.y) > 0.95 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+  const zAxis = new THREE.Vector3().crossVectors(xAxis, up).normalize();
+  const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+  const m = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+  magGroup.quaternion.setFromRotationMatrix(m);
+  const tilt = magGroup.userData.magTilt || 0;
+  if (tilt) {
+    const tiltQ = new THREE.Quaternion().setFromAxisAngle(xAxis, THREE.MathUtils.degToRad(tilt));
+    magGroup.quaternion.premultiply(tiltQ);
+  }
+}
+
+// Large complex solar magnetic field
+function createSolarMagneticField(sunR) {
+  const group = new THREE.Group();
+  const colors = [0xff5522, 0xffaa33, 0xffcc55, 0xff3300, 0xff8800, 0xff2200];
+
+  // Large closed loops / helmet streamers (much bigger scale)
+  for (let loop = 0; loop < 36; loop++) {
+    const phi = (loop / 36) * Math.PI * 2;
+    const L = sunR * (3.5 + (loop % 5) * 1.1);
     const pts = [];
-    for (let j = 0; j <= 40; j++) {
-      const t = j / 40;
-      const r = sunR * (1.15 + t * 6);
-      const lat = polar * (0.65 + t * 0.2);
-      const spiral = t * 0.9; // Parker-spiral hint
-      const x = r * Math.cos(lat) * Math.cos(phi + spiral);
-      const y = r * Math.sin(lat);
-      const z = r * Math.cos(lat) * Math.sin(phi + spiral);
-      pts.push(new THREE.Vector3(x, y, z));
+    for (let i = 0; i <= 56; i++) {
+      const t = i / 56;
+      const theta = 0.15 + t * (Math.PI - 0.3);
+      let r = L * Math.sin(theta) * Math.sin(theta);
+      if (r < sunR * 1.1) continue;
+      const warp = 0.35 * sunR * Math.sin(2 * theta + loop * 0.55);
+      pts.push(new THREE.Vector3(
+        (r + warp) * Math.sin(theta) * Math.cos(phi),
+        (r + warp) * Math.cos(theta),
+        (r + warp) * Math.sin(theta) * Math.sin(phi)
+      ));
     }
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    group.add(new THREE.Line(geo, new THREE.LineBasicMaterial({
-      color: 0xff8844,
-      transparent: true,
-      opacity: 0.28,
-      depthWrite: false
-    })));
+    if (pts.length < 4) continue;
+    group.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({
+        color: colors[loop % colors.length],
+        transparent: true, opacity: 0.42, depthWrite: false
+      })
+    ));
+  }
+
+  // Open polar plumes + strong Parker spiral (extends far)
+  for (let i = 0; i < 32; i++) {
+    const phi0 = (i / 32) * Math.PI * 2;
+    const polar = i % 2 === 0 ? 1 : -1;
+    const pts = [];
+    for (let j = 0; j <= 60; j++) {
+      const t = j / 60;
+      const r = sunR * (1.3 + t * 22);
+      const lat = polar * (0.5 + t * 0.28);
+      const spiral = t * 2.2;
+      pts.push(new THREE.Vector3(
+        r * Math.cos(lat) * Math.cos(phi0 + spiral),
+        r * Math.sin(lat),
+        r * Math.cos(lat) * Math.sin(phi0 + spiral)
+      ));
+    }
+    group.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({
+        color: 0xff6633, transparent: true, opacity: 0.28, depthWrite: false
+      })
+    ));
+  }
+
+  // Equatorial current sheet — wide wavy disk
+  for (let i = 0; i < 24; i++) {
+    const pts = [];
+    for (let j = 0; j <= 50; j++) {
+      const t = j / 50;
+      const r = sunR * (2.0 + t * 18);
+      const ang = (i / 24) * Math.PI * 2 + t * 1.6;
+      const wave = Math.sin(ang * 2 + t * 3) * sunR * 0.55 * t;
+      pts.push(new THREE.Vector3(r * Math.cos(ang), wave, r * Math.sin(ang)));
+    }
+    group.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({
+        color: 0xffaa55, transparent: true, opacity: 0.2, depthWrite: false
+      })
+    ));
   }
 
   group.userData.isMagnetosphere = true;
@@ -861,10 +1002,10 @@ scene.add(orbitLinesGroup);
 
 // Create barycenter marker
 const baryMarker = new THREE.Mesh(
-  new THREE.SphereGeometry(0.12, 12, 12),
-  new THREE.MeshBasicMaterial({ color: 0xff44aa, transparent: true, opacity: 0.25 })
+  new THREE.SphereGeometry(0.18, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xff44aa, transparent: true, opacity: 0.85 })
 );
-baryMarker.visible = false; // barycenter de-emphasized; magnetic fields prioritized
+baryMarker.visible = true;
 scene.add(baryMarker);
 
 PLANETS.forEach(p => {
@@ -952,10 +1093,10 @@ PLANETS.forEach(p => {
     group.userData.ring = ring;
   }
 
-  // Planetary magnetosphere (dipole field lines)
+  // Planetary magnetosphere — parented to planet group (oriented to Sun each frame)
   if (p.magMoment && p.magMoment > 0) {
     const mag = createMagnetosphere(r, p.magMoment, p.magTilt || 0, p.magColor);
-    tiltPivot.add(mag);
+    group.add(mag);
     group.userData.magnetosphere = mag;
   }
   
@@ -1017,6 +1158,67 @@ PLANETS.forEach(p => {
   group.add(sprite);
   labels[p.id] = sprite;
   
+  // Moons around this planet
+  const moonList = [];
+  const moonDefs = MOONS[p.id] || [];
+  const planetR = r;
+  moonDefs.forEach((md, mi) => {
+    const moonR = Math.max(0.05, 0.14 * (md.radiusRel || 0.5));
+    const segs = moonR > 0.12 ? 32 : 20;
+    const matOpts = {
+      color: md.texture ? 0xffffff : (md.color || 0xaaaaaa),
+      roughness: 0.88,
+      metalness: 0.04,
+      emissive: 0x222222,
+      emissiveIntensity: 0.12
+    };
+    if (md.texture && TEX[md.texture]) {
+      matOpts.map = loadTex(TEX[md.texture]);
+    }
+    const moonMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(moonR, segs, segs),
+      new THREE.MeshStandardMaterial(matOpts)
+    );
+    group.add(moonMesh);
+
+    // Titan-like haze
+    if (md.haze) {
+      const haze = new THREE.Mesh(
+        new THREE.SphereGeometry(moonR * 1.12, 20, 20),
+        new THREE.MeshBasicMaterial({
+          color: 0xe8b060, transparent: true, opacity: 0.18,
+          side: THREE.BackSide, depthWrite: false
+        })
+      );
+      moonMesh.add(haze);
+    }
+
+    // Moon orbit guide
+    const orbitR = planetR * md.dist;
+    const mOrbitPts = [];
+    for (let i = 0; i <= 96; i++) {
+      const a = (i / 96) * Math.PI * 2;
+      mOrbitPts.push(new THREE.Vector3(Math.cos(a) * orbitR, 0, Math.sin(a) * orbitR));
+    }
+    const mOrbit = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(mOrbitPts),
+      new THREE.LineBasicMaterial({
+        color: md.color || 0x888888, transparent: true, opacity: 0.28
+      })
+    );
+    mOrbit.rotation.z = THREE.MathUtils.degToRad(p.tilt);
+    group.add(mOrbit);
+    moonOrbitLines.push(mOrbit);
+
+    moonList.push({
+      def: md,
+      mesh: moonMesh,
+      orbitLine: mOrbit,
+      anomaly: (mi * 1.7 + Math.random()) % (Math.PI * 2),
+      dist: orbitR
+    });
+  });
+
   planetObjects[p.id] = {
     data: p,
     group,
@@ -1025,9 +1227,461 @@ PLANETS.forEach(p => {
     meanAnomaly: Math.random() * Math.PI * 2,
     position: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
-    mass: p.mass
+    mass: p.mass,
+    moons: moonList
   };
 });
+
+function updateMoons(dt) {
+  PLANETS.forEach(p => {
+    const obj = planetObjects[p.id];
+    if (!obj.moons || !obj.moons.length) return;
+    const tilt = THREE.MathUtils.degToRad(p.tilt);
+    obj.moons.forEach(m => {
+      const period = m.def.periodDays;
+      const n = (2 * Math.PI) / Math.abs(period);
+      const sign = period < 0 ? -1 : 1;
+      m.anomaly += sign * n * dt;
+      if (m.anomaly > Math.PI * 2) m.anomaly -= Math.PI * 2;
+      if (m.anomaly < 0) m.anomaly += Math.PI * 2;
+
+      const e = m.def.e || 0;
+      const rr = m.dist * (1 - e * e) / (1 + e * Math.cos(m.anomaly));
+      const x = Math.cos(m.anomaly) * rr;
+      const z = Math.sin(m.anomaly) * rr;
+      const y = x * Math.sin(tilt);
+      const x2 = x * Math.cos(tilt);
+      m.mesh.position.set(x2, y, z);
+      m.mesh.rotation.y += 0.02;
+    });
+  });
+}
+
+// ===================== ASTEROIDS / COMETS / METEORS =====================
+const debrisGroup = new THREE.Group();
+scene.add(debrisGroup);
+
+function makeRockGeometry(size) {
+  const detail = size > 0.15 ? 2 : 1;
+  const geo = new THREE.IcosahedronGeometry(size, detail);
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const n = 0.65 + Math.random() * 0.55;
+    // crater-like dents
+    const crater = Math.random() < 0.12 ? 0.7 : 1.0;
+    v.multiplyScalar(n * crater);
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createAsteroidBelt() {
+  const root = new THREE.Group();
+  root.userData.isAsteroidBelt = true;
+
+  // Dense dust + micro-rocks
+  const count = 4000;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const t = Math.random();
+    const au = 2.0 + Math.pow(t, 0.6) * 1.4;
+    const angle = Math.random() * Math.PI * 2;
+    const r = scaledDistance(au);
+    const y = (Math.random() - 0.5) * 3.0;
+    positions[i * 3] = Math.cos(angle) * r;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = Math.sin(angle) * r;
+    const shade = 0.28 + Math.random() * 0.55;
+    const warm = Math.random() * 0.22;
+    colors[i * 3] = shade + warm;
+    colors[i * 3 + 1] = shade * 0.86;
+    colors[i * 3 + 2] = shade * 0.65;
+  }
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  root.add(new THREE.Points(pGeo, new THREE.PointsMaterial({
+    size: 0.28, vertexColors: true, transparent: true, opacity: 0.92,
+    sizeAttenuation: true, depthWrite: false
+  })));
+
+  // Large irregular asteroids — orbiting & spinning
+  const bigRocks = [];
+  for (let i = 0; i < 140; i++) {
+    const au = 2.1 + Math.random() * 1.25;
+    const angle = Math.random() * Math.PI * 2;
+    const r = scaledDistance(au);
+    const size = 0.06 + Math.random() * 0.28;
+    const mesh = new THREE.Mesh(
+      makeRockGeometry(size),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setRGB(
+          0.35 + Math.random() * 0.4,
+          0.28 + Math.random() * 0.28,
+          0.2 + Math.random() * 0.22
+        ),
+        roughness: 0.92,
+        metalness: 0.05 + Math.random() * 0.12,
+        emissive: 0x1a1208,
+        emissiveIntensity: 0.1,
+        flatShading: true
+      })
+    );
+    mesh.position.set(Math.cos(angle) * r, (Math.random() - 0.5) * 2.4, Math.sin(angle) * r);
+    mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+    mesh.userData.spin = new THREE.Vector3(
+      (Math.random() - 0.5) * 0.7,
+      (Math.random() - 0.5) * 0.7,
+      (Math.random() - 0.5) * 0.7
+    );
+    mesh.userData.orbitAngle = angle;
+    mesh.userData.orbitR = r;
+    mesh.userData.orbitY = mesh.position.y;
+    // Kepler-ish: inner rocks orbit faster
+    mesh.userData.orbitSpeed = 0.04 * Math.pow(2.5 / au, 1.5);
+    root.add(mesh);
+    bigRocks.push(mesh);
+  }
+  root.userData.bigRocks = bigRocks;
+  return root;
+}
+
+function createComets(n = 8) {
+  const list = [];
+  for (let i = 0; i < n; i++) {
+    const group = new THREE.Group();
+
+    const nucleus = new THREE.Mesh(
+      makeRockGeometry(0.14 + Math.random() * 0.1),
+      new THREE.MeshStandardMaterial({
+        color: 0xd8d4cc, roughness: 0.65, metalness: 0.12,
+        emissive: 0x665544, emissiveIntensity: 0.25, flatShading: true
+      })
+    );
+    group.add(nucleus);
+
+    // Multi-layer coma
+    const coma = new THREE.Mesh(
+      new THREE.SphereGeometry(0.45, 20, 20),
+      new THREE.MeshBasicMaterial({
+        color: 0xcce8ff, transparent: true, opacity: 0.22,
+        depthWrite: false, blending: THREE.AdditiveBlending
+      })
+    );
+    group.add(coma);
+    const coma2 = new THREE.Mesh(
+      new THREE.SphereGeometry(0.75, 16, 16),
+      new THREE.MeshBasicMaterial({
+        color: 0x88aaff, transparent: true, opacity: 0.08,
+        depthWrite: false, blending: THREE.AdditiveBlending
+      })
+    );
+    group.add(coma2);
+
+    // Dust tail — many particles, yellowish-white
+    const tailLen = 80 + Math.floor(Math.random() * 40);
+    const tailPos = new Float32Array(tailLen * 3);
+    const tailCol = new Float32Array(tailLen * 3);
+    for (let t = 0; t < tailLen; t++) {
+      const f = t / tailLen;
+      tailCol[t * 3] = 1.0;
+      tailCol[t * 3 + 1] = 0.85 - f * 0.25;
+      tailCol[t * 3 + 2] = 0.55 - f * 0.3;
+    }
+    const tailGeo = new THREE.BufferGeometry();
+    tailGeo.setAttribute('position', new THREE.BufferAttribute(tailPos, 3));
+    tailGeo.setAttribute('color', new THREE.BufferAttribute(tailCol, 3));
+    const tail = new THREE.Points(tailGeo, new THREE.PointsMaterial({
+      size: 0.7, vertexColors: true, transparent: true, opacity: 0.85,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    }));
+    group.add(tail);
+
+    // Ion tail — blue-green, straight
+    const ionCount = 36;
+    const ionPts = [];
+    for (let t = 0; t < ionCount; t++) ionPts.push(new THREE.Vector3());
+    const ion = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(ionPts),
+      new THREE.LineBasicMaterial({
+        color: 0x44ccff, transparent: true, opacity: 0.7,
+        depthWrite: false, blending: THREE.AdditiveBlending
+      })
+    );
+    group.add(ion);
+
+    // Eccentric comet orbit — moves noticeably
+    const a = 2.8 + Math.random() * 6;
+    const e = 0.7 + Math.random() * 0.25;
+    list.push({
+      group, nucleus, coma, coma2, tail, ion, tailLen, ionCount,
+      a, e,
+      anomaly: Math.random() * Math.PI * 2,
+      // Faster visual periods so motion is obvious
+      period: 25 + Math.random() * 55,
+      incl: (Math.random() - 0.5) * 0.85,
+      node: Math.random() * Math.PI * 2
+    });
+    debrisGroup.add(group);
+  }
+  return list;
+}
+
+function createMeteorSystem() {
+  const maxMeteors = 40;
+  const meteors = [];
+  for (let i = 0; i < maxMeteors; i++) {
+    // Multi-segment glowing trail
+    const segs = 8;
+    const pts = [];
+    for (let s = 0; s < segs; s++) pts.push(new THREE.Vector3());
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({
+        color: 0xfff0c0, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE.AdditiveBlending
+      })
+    );
+    // Particle spark trail
+    const sparkN = 16;
+    const sparkPos = new Float32Array(sparkN * 3);
+    const sparkCol = new Float32Array(sparkN * 3);
+    for (let s = 0; s < sparkN; s++) {
+      sparkCol[s * 3] = 1;
+      sparkCol[s * 3 + 1] = 0.85;
+      sparkCol[s * 3 + 2] = 0.4;
+    }
+    const sparks = new THREE.Points(
+      (() => {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+        g.setAttribute('color', new THREE.BufferAttribute(sparkCol, 3));
+        return g;
+      })(),
+      new THREE.PointsMaterial({
+        size: 0.35, vertexColors: true, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+      })
+    );
+    // Fireball head
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 12, 12),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffee, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE.AdditiveBlending
+      })
+    );
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.28, 12, 12),
+      new THREE.MeshBasicMaterial({
+        color: 0xffaa44, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE.AdditiveBlending
+      })
+    );
+    const g = new THREE.Group();
+    g.add(line);
+    g.add(sparks);
+    g.add(head);
+    g.add(glow);
+    g.visible = false;
+    debrisGroup.add(g);
+    meteors.push({
+      group: g, line, sparks, head, glow,
+      sparkN, segs,
+      active: false,
+      pos: new THREE.Vector3(), vel: new THREE.Vector3(),
+      life: 0, maxLife: 1, brightness: 1
+    });
+  }
+  return meteors;
+}
+
+const asteroidBelt = createAsteroidBelt();
+debrisGroup.add(asteroidBelt);
+const comets = createComets(8);
+const meteors = createMeteorSystem();
+let showAsteroids = true;
+let meteorSpawnTimer = 0;
+
+function updateDebris(dt, simDt) {
+  if (!showAsteroids) return;
+
+  // Asteroids: spin + Kepler-like orbital motion
+  const rocks = asteroidBelt.userData.bigRocks || [];
+  rocks.forEach(mesh => {
+    const s = mesh.userData.spin;
+    mesh.rotation.x += s.x * dt;
+    mesh.rotation.y += s.y * dt;
+    mesh.rotation.z += s.z * dt;
+    mesh.userData.orbitAngle += mesh.userData.orbitSpeed * Math.max(simDt, dt * 0.5);
+    const a = mesh.userData.orbitAngle;
+    const r = mesh.userData.orbitR;
+    mesh.position.x = Math.cos(a) * r;
+    mesh.position.z = Math.sin(a) * r;
+    mesh.position.y = mesh.userData.orbitY;
+  });
+
+  // Comets: eccentric orbits, tails always anti-sunward
+  const sunPos = new THREE.Vector3();
+  sunGroup.getWorldPosition(sunPos);
+  comets.forEach(c => {
+    // Move even when simDt is small
+    const n = (2 * Math.PI) / c.period;
+    c.anomaly += n * Math.max(simDt, dt * 2.5);
+    if (c.anomaly > Math.PI * 2) c.anomaly -= Math.PI * 2;
+
+    const E = solveKepler(c.anomaly, c.e);
+    const nu = trueAnomaly(E, c.e);
+    const rAU = c.a * (1 - c.e * Math.cos(E));
+    const r = scaledDistance(Math.max(0.35, rAU));
+    const cosN = Math.cos(c.node), sinN = Math.sin(c.node);
+    const cosV = Math.cos(nu), sinV = Math.sin(nu);
+    const xOrb = r * cosV, zOrb = r * sinV;
+    const x = xOrb * cosN - zOrb * sinN;
+    const z = xOrb * sinN + zOrb * cosN;
+    const y = zOrb * c.incl * 0.55;
+    c.group.position.set(x, y, z);
+
+    const away = c.group.position.clone().sub(sunPos);
+    if (away.lengthSq() < 1e-6) return;
+    away.normalize();
+
+    // Dust tail length grows near Sun
+    const near = Math.max(0.15, Math.min(1.4, 3.0 / Math.max(rAU, 0.5)));
+    const dustLen = 10 + near * 22;
+    const arr = c.tail.geometry.attributes.position.array;
+    for (let t = 0; t < c.tailLen; t++) {
+      const f = t / c.tailLen;
+      const spread = f * f * 2.2 * near;
+      // slight curve (dust lags behind orbital motion)
+      const lag = f * 0.35;
+      const side = new THREE.Vector3(-away.z, 0, away.x).multiplyScalar(lag * r * 0.02);
+      arr[t * 3]     = away.x * f * dustLen + side.x + (Math.random() - 0.5) * spread * 0.15;
+      arr[t * 3 + 1] = away.y * f * dustLen + (Math.random() - 0.5) * spread * 0.15;
+      arr[t * 3 + 2] = away.z * f * dustLen + side.z + (Math.random() - 0.5) * spread * 0.15;
+    }
+    c.tail.geometry.attributes.position.needsUpdate = true;
+    c.tail.material.opacity = 0.45 + near * 0.4;
+    c.tail.material.size = 0.45 + near * 0.4;
+
+    const ionArr = c.ion.geometry.attributes.position.array;
+    const ionLen = 14 + near * 20;
+    for (let t = 0; t < c.ionCount; t++) {
+      const f = t / (c.ionCount - 1);
+      ionArr[t * 3] = away.x * f * ionLen;
+      ionArr[t * 3 + 1] = away.y * f * ionLen;
+      ionArr[t * 3 + 2] = away.z * f * ionLen;
+    }
+    c.ion.geometry.attributes.position.needsUpdate = true;
+    c.ion.material.opacity = 0.35 + near * 0.45;
+
+    c.coma.material.opacity = 0.12 + near * 0.28;
+    c.coma2.material.opacity = 0.04 + near * 0.12;
+    c.coma.scale.setScalar(0.8 + near * 0.6);
+    c.nucleus.rotation.y += dt * 0.8;
+    c.nucleus.rotation.x += dt * 0.3;
+  });
+
+  // Realistic meteors / fireballs
+  meteorSpawnTimer -= dt;
+  if (meteorSpawnTimer <= 0) {
+    meteorSpawnTimer = 0.15 + Math.random() * 0.85;
+    const m = meteors.find(x => !x.active);
+    if (m) {
+      m.active = true;
+      m.life = 0;
+      m.maxLife = 0.45 + Math.random() * 1.1;
+      m.brightness = 0.6 + Math.random() * 0.4;
+      // Spawn near camera-ish volume for visibility
+      const cam = camera.position;
+      const ang = Math.random() * Math.PI * 2;
+      const rad = 8 + Math.random() * 35;
+      m.pos.set(
+        cam.x + Math.cos(ang) * rad + (Math.random() - 0.5) * 20,
+        cam.y + (Math.random() - 0.5) * 25,
+        cam.z + Math.sin(ang) * rad + (Math.random() - 0.5) * 20
+      );
+      const dir = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        -0.3 - Math.random() * 0.8,
+        (Math.random() - 0.5) * 2
+      ).normalize();
+      const speed = 40 + Math.random() * 90;
+      m.vel.copy(dir.multiplyScalar(speed));
+      // Color variation: white, yellow, green, orange fireballs
+      const hue = Math.random();
+      if (hue < 0.5) {
+        m.line.material.color.setHex(0xfff5d0);
+        m.head.material.color.setHex(0xffffee);
+        m.glow.material.color.setHex(0xffaa44);
+      } else if (hue < 0.75) {
+        m.line.material.color.setHex(0xaaffcc);
+        m.head.material.color.setHex(0xeeffee);
+        m.glow.material.color.setHex(0x44ff88);
+      } else {
+        m.line.material.color.setHex(0xffccaa);
+        m.head.material.color.setHex(0xffeecc);
+        m.glow.material.color.setHex(0xff6622);
+      }
+      m.group.visible = true;
+    }
+  }
+
+  meteors.forEach(m => {
+    if (!m.active) return;
+    m.life += dt;
+    m.pos.addScaledVector(m.vel, dt);
+    const fade = Math.max(0, 1 - m.life / m.maxLife);
+    // Bright flare at start
+    const flare = m.life < 0.08 ? 1.4 : 1.0;
+    if (fade <= 0) {
+      m.active = false;
+      m.group.visible = false;
+      m.head.material.opacity = 0;
+      m.glow.material.opacity = 0;
+      m.line.material.opacity = 0;
+      m.sparks.material.opacity = 0;
+      return;
+    }
+    const b = fade * m.brightness * flare;
+    m.head.position.copy(m.pos);
+    m.glow.position.copy(m.pos);
+    m.head.material.opacity = b * 0.95;
+    m.glow.material.opacity = b * 0.35;
+    m.head.scale.setScalar(0.7 + b * 0.6);
+    m.glow.scale.setScalar(0.8 + b * 0.8);
+
+    const back = m.vel.clone().normalize();
+    const arr = m.line.geometry.attributes.position.array;
+    for (let s = 0; s < m.segs; s++) {
+      const f = s / (m.segs - 1);
+      const len = -f * (3.5 + b * 4);
+      arr[s * 3] = m.pos.x + back.x * len;
+      arr[s * 3 + 1] = m.pos.y + back.y * len;
+      arr[s * 3 + 2] = m.pos.z + back.z * len;
+    }
+    m.line.geometry.attributes.position.needsUpdate = true;
+    m.line.material.opacity = b * 0.9;
+
+    // Sparks along trail
+    const sArr = m.sparks.geometry.attributes.position.array;
+    for (let s = 0; s < m.sparkN; s++) {
+      const f = s / m.sparkN;
+      const len = -f * (2.5 + b * 3);
+      sArr[s * 3] = m.pos.x + back.x * len + (Math.random() - 0.5) * 0.4 * f;
+      sArr[s * 3 + 1] = m.pos.y + back.y * len + (Math.random() - 0.5) * 0.4 * f;
+      sArr[s * 3 + 2] = m.pos.z + back.z * len + (Math.random() - 0.5) * 0.4 * f;
+    }
+    m.sparks.geometry.attributes.position.needsUpdate = true;
+    m.sparks.material.opacity = b * 0.7;
+    m.sparks.material.size = 0.2 + b * 0.35;
+  });
+}
 
 // ===================== STATE =====================
 let timeScale = 1.5;          // simulation days per real second (scaled)
@@ -1139,7 +1793,8 @@ function computeBarycenterHelio() {
 
 // Visual exaggeration of Sun's barycentric motion (real value is tiny on screen)
 // Panel still shows true AU distance.
-const BARY_VISUAL_BOOST = 12;
+// Mild visual boost so Sun–bary motion is visible without looking cartoonish
+const BARY_VISUAL_BOOST = 6;
 
 // Place Sun + planets so that barycenter sits at scene origin
 function applyBarycentricFrame() {
@@ -1467,6 +2122,17 @@ document.getElementById('btnOrbits').addEventListener('click', function() {
   Object.values(orbitLines).forEach(l => l.visible = showOrbits);
 });
 
+document.getElementById('btnMoonOrbits').addEventListener('click', function() {
+  const on = this.classList.toggle('active');
+  moonOrbitLines.forEach(l => { l.visible = on; });
+});
+
+document.getElementById('btnAsteroids').addEventListener('click', function() {
+  showAsteroids = !showAsteroids;
+  this.classList.toggle('active', showAsteroids);
+  debrisGroup.visible = showAsteroids;
+});
+
 document.getElementById('btnTrails').addEventListener('click', function() {
   showTrails = !showTrails;
   this.classList.toggle('active', showTrails);
@@ -1529,7 +2195,21 @@ document.getElementById('btnNBody').addEventListener('click', function() {
   sunTrailPositions.length = 0;
 });
 
-// Click to select planet
+function clearPlanetSelection() {
+  selectedPlanet = null;
+  const panel = document.getElementById('info-panel');
+  if (panel) panel.classList.remove('visible');
+}
+
+const btnCloseInfo = document.getElementById('btnCloseInfo');
+if (btnCloseInfo) {
+  btnCloseInfo.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearPlanetSelection();
+  });
+}
+
+// Click to select planet — empty space closes details
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
@@ -1551,6 +2231,9 @@ renderer.domElement.addEventListener('click', (event) => {
         break;
       }
     }
+  } else {
+    // খালি জায়গায় ক্লিক → বিবরণ প্যানেল বন্ধ
+    clearPlanetSelection();
   }
 });
 
@@ -1559,9 +2242,11 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     setPaused(!paused);
   }
-  // H key toggles the control panel
   if (e.code === 'KeyH') {
     toggleHud();
+  }
+  if (e.code === 'Escape') {
+    clearPlanetSelection();
   }
 });
 
@@ -1584,15 +2269,41 @@ function toggleHud(forceClose) {
 if (btnCloseHud) btnCloseHud.addEventListener('click', () => toggleHud(true));
 if (btnOpenHud) btnOpenHud.addEventListener('click', () => toggleHud(false));
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+function onViewportResize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(w, h, true);
+  composer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+}
+window.addEventListener('resize', onViewportResize);
+window.addEventListener('orientationchange', () => {
+  setTimeout(onViewportResize, 150);
 });
+
+// Touch-friendly controls
+controls.enablePan = true;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+controls.zoomSpeed = 1.1;
+controls.rotateSpeed = 0.7;
 
 // ===================== ANIMATION LOOP =====================
 let lastTime = performance.now();
+
+function updateMagnetosphereOrientations() {
+  const sunPos = new THREE.Vector3();
+  sunGroup.getWorldPosition(sunPos);
+  PLANETS.forEach(p => {
+    const obj = planetObjects[p.id];
+    const mag = obj.group.userData.magnetosphere;
+    if (!mag || !mag.visible) return;
+    const planetPos = new THREE.Vector3();
+    obj.group.getWorldPosition(planetPos);
+    orientMagnetosphereTowardSun(mag, planetPos, sunPos);
+  });
+}
 
 function animate() {
   requestAnimationFrame(animate);
@@ -1618,11 +2329,18 @@ function animate() {
     }
     
     updateTrails();
-    
+    updateMoons(simDt);
+    updateDebris(dt, simDt);
+
     // সূর্যের ধীর ঘূর্ণন শুধু চলার সময়
     sunMesh.rotation.y += 0.002 * Math.min(timeScale, 2);
+    if (sunMagField) sunMagField.rotation.y += 0.0008 * Math.min(timeScale, 2);
+  } else if (showAsteroids) {
+    // Still animate meteors slowly when paused
+    updateDebris(dt, 0);
   }
-  
+
+  updateMagnetosphereOrientations();
   updateCameraFocus();
   updateInfoPanel();
   updateBaryDisplay();
@@ -1655,4 +2373,4 @@ try {
 }
 </script>
 </body>
-</html>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+</html>
